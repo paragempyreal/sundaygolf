@@ -9,6 +9,7 @@ import {
   X,
   Shield,
   ArrowLeftRight,
+  RefreshCw,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -20,6 +21,7 @@ const Layout: React.FC = () => {
 
   const navigation = [
     { name: "Dashboard", href: "/", icon: BarChart3 },
+    { name: "Product Sync", href: "/product-sync", icon: RefreshCw },
     { name: "Configuration", href: "/configuration", icon: Settings },
     ...(user?.isAdmin
       ? [

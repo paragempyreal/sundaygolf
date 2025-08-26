@@ -38,7 +38,7 @@ The backend API has been tested and developed with:
 - Python 3.8+
 - Node.js 16+
 - PostgreSQL database
-- Fulfil API credentials
+- Fulfil 3PL API credentials
 - ShipHero API credentials
 
 ### Automated Setup (Recommended)
@@ -187,6 +187,43 @@ The backend automatically synchronizes product data:
 2. **Processing**: Transforms data to ShipHero format
 3. **Syncing**: Pushes updates to ShipHero via API
 4. **Tracking**: Logs all sync operations and errors
+
+### Product Sync Features
+
+- **Automated Sync**: Runs periodically based on configuration
+- **Real-time Updates**: Syncs products as they're updated
+- **Error Handling**: Robust error handling and logging
+- **Sync Status**: Frontend displays sync status and logs
+- **Product Tracking**: Tracks all products in mediator database
+
+### Supported Product Fields
+
+The system synchronizes the following product information:
+
+- Variant Name
+- Code
+- Media (Images)
+- UPC
+- ASIN
+- Buyer SKU
+- Weight
+- Length, Width, Height
+- Dimension Unit
+- Weight UOM
+- Country of Origin
+- HS Code
+- Quantity per Case
+- Unit of Measure
+- Fulfil Product ID (stored in mediator database for tracking)
+- ShipHero Product ID (stored in mediator database for tracking)
+
+### Sync Process
+
+1. Fetch products from Fulfil API
+2. Store products in mediator database
+3. Transform data to ShipHero format
+4. Create or update products in ShipHero
+5. Log sync operations and errors
 
 ## 🎨 Frontend Features
 

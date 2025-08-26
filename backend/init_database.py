@@ -102,10 +102,8 @@ def show_status():
             print("\n🔧 Current Configuration:")
             configs = config_service.get_all_config(db)
             for key, value in configs.items():
-                if configs.get(key, {}).get('is_sensitive', False):
-                    display_value = '***' if value else '(not set)'
-                else:
-                    display_value = value or '(not set)'
+                masked = key.endswith('_key') or key.endswith('_token') or key.endswith('_password')
+                display_value = ('***' if value else '(not set)') if masked else (value or '(not set)')
                 print(f"   {key}: {display_value}")
                 
         finally:

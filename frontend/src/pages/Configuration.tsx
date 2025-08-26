@@ -13,9 +13,7 @@ import {
   BarChart3,
   Settings,
   Save,
-  TestTube,
   CheckCircle,
-  AlertTriangle,
   Users,
   Plus,
   Trash2,
@@ -51,8 +49,9 @@ const Configuration: React.FC = () => {
 
   const [shipheroConfig, setShipHeroConfig] = useState<ShipHeroConfig>({
     refreshToken: "",
-    oauthUrl: "https://public-api.shiphero.com/oauth",
+    oauthUrl: "https://public-api.shiphero.com/auth/refresh",
     apiBaseUrl: "https://public-api.shiphero.com",
+    defaultWarehouseId: "",
   });
 
   const [systemConfig, setSystemConfig] = useState<SystemConfig>({
@@ -71,19 +70,7 @@ const Configuration: React.FC = () => {
     isActive: false,
   });
 
-  // Test connection states
-  const [fulfilTestResult, setFulfilTestResult] = useState<{
-    success: boolean;
-    message: string;
-  } | null>(null);
-  const [shipheroTestResult, setShipHeroTestResult] = useState<{
-    success: boolean;
-    message: string;
-  } | null>(null);
-  const [emailTestResult, setEmailTestResult] = useState<{
-    success: boolean;
-    message: string;
-  } | null>(null);
+  // Test connection states removed
 
   // User management states
   const [users, setUsers] = useState<User[]>([]);
@@ -205,47 +192,7 @@ const Configuration: React.FC = () => {
     }
   };
 
-  const testFulfilConnection = async () => {
-    try {
-      const result = await configService.testFulfilConnection();
-      setFulfilTestResult(result);
-      if (result.success) {
-        toast.success("Fulfil connection test successful");
-      } else {
-        toast.error(result.message);
-      }
-    } catch (error) {
-      toast.error("Connection test failed");
-    }
-  };
-
-  const testShipHeroConnection = async () => {
-    try {
-      const result = await configService.testShipHeroConnection();
-      setShipHeroTestResult(result);
-      if (result.success) {
-        toast.success("ShipHero connection test successful");
-      } else {
-        toast.error(result.message);
-      }
-    } catch (error) {
-      toast.error("Connection test failed");
-    }
-  };
-
-  const testEmailConnection = async () => {
-    try {
-      const result = await configService.testEmailConfig();
-      setEmailTestResult(result);
-      if (result.success) {
-        toast.success("Email configuration test successful");
-      } else {
-        toast.error(result.message);
-      }
-    } catch (error) {
-      toast.error("Email test failed");
-    }
-  };
+  // Test handlers removed
 
   const handleCreateUser = async () => {
     try {
@@ -378,42 +325,7 @@ const Configuration: React.FC = () => {
                   <Save className="h-4 w-4 mr-2" />
                   {isSaving ? "Saving..." : "Save Configuration"}
                 </button>
-                <button
-                  onClick={testFulfilConnection}
-                  className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-                >
-                  <TestTube className="h-4 w-4 mr-2" />
-                  Test Connection
-                </button>
               </div>
-              {fulfilTestResult && (
-                <div
-                  className={`p-3 rounded-md ${
-                    fulfilTestResult.success ? "bg-green-50" : "bg-red-50"
-                  }`}
-                >
-                  <div className="flex">
-                    <div className="flex-shrink-0">
-                      {fulfilTestResult.success ? (
-                        <CheckCircle className="h-5 w-5 text-green-400" />
-                      ) : (
-                        <AlertTriangle className="h-5 w-5 text-red-400" />
-                      )}
-                    </div>
-                    <div className="ml-3">
-                      <p
-                        className={`text-sm ${
-                          fulfilTestResult.success
-                            ? "text-green-800"
-                            : "text-red-800"
-                        }`}
-                      >
-                        {fulfilTestResult.message}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         )}
@@ -485,6 +397,31 @@ const Configuration: React.FC = () => {
                   className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
                 />
               </div>
+              <div>
+                <label
+                  htmlFor="shiphero-default-warehouse-id"
+                  className="block text-sm font-medium text-gray-700"
+                >
+                  Default Warehouse ID
+                </label>
+                <input
+                  type="text"
+                  id="shiphero-default-warehouse-id"
+                  value={shipheroConfig.defaultWarehouseId || ""}
+                  onChange={(e) =>
+                    setShipHeroConfig({
+                      ...shipheroConfig,
+                      defaultWarehouseId: e.target.value,
+                    })
+                  }
+                  className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                  placeholder="V2FyZWhvdXNlOjEyMzQ="
+                />
+                <p className="mt-1 text-sm text-gray-500">
+                  Used when creating products in ShipHero to satisfy required
+                  warehouse_products.
+                </p>
+              </div>
               <div className="flex space-x-3">
                 <button
                   onClick={handleSaveShipHero}
@@ -494,42 +431,7 @@ const Configuration: React.FC = () => {
                   <Save className="h-4 w-4 mr-2" />
                   {isSaving ? "Saving..." : "Save Configuration"}
                 </button>
-                <button
-                  onClick={testShipHeroConnection}
-                  className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-                >
-                  <TestTube className="h-4 w-4 mr-2" />
-                  Test Connection
-                </button>
               </div>
-              {shipheroTestResult && (
-                <div
-                  className={`p-3 rounded-md ${
-                    shipheroTestResult.success ? "bg-green-50" : "bg-red-50"
-                  }`}
-                >
-                  <div className="flex">
-                    <div className="flex-shrink-0">
-                      {shipheroTestResult.success ? (
-                        <CheckCircle className="h-5 w-5 text-green-400" />
-                      ) : (
-                        <AlertTriangle className="h-5 w-5 text-red-400" />
-                      )}
-                    </div>
-                    <div className="ml-3">
-                      <p
-                        className={`text-sm ${
-                          shipheroTestResult.success
-                            ? "text-green-800"
-                            : "text-red-800"
-                        }`}
-                      >
-                        {shipheroTestResult.message}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         )}
@@ -772,43 +674,7 @@ const Configuration: React.FC = () => {
                   <Save className="h-4 w-4 mr-2" />
                   {isSaving ? "Saving..." : "Save Configuration"}
                 </button>
-                <button
-                  onClick={testEmailConnection}
-                  className="inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-                >
-                  <TestTube className="h-4 w-4 mr-2" />
-                  Test Email
-                </button>
               </div>
-
-              {emailTestResult && (
-                <div
-                  className={`p-3 rounded-md ${
-                    emailTestResult.success ? "bg-green-50" : "bg-red-50"
-                  }`}
-                >
-                  <div className="flex">
-                    <div className="flex-shrink-0">
-                      {emailTestResult.success ? (
-                        <CheckCircle className="h-5 w-5 text-green-400" />
-                      ) : (
-                        <AlertTriangle className="h-5 w-5 text-red-400" />
-                      )}
-                    </div>
-                    <div className="ml-3">
-                      <p
-                        className={`text-sm ${
-                          emailTestResult.success
-                            ? "text-green-800"
-                            : "text-red-800"
-                        }`}
-                      >
-                        {emailTestResult.message}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
 
               {emailConfig.isActive && (
                 <div className="p-3 bg-green-50 rounded-md">

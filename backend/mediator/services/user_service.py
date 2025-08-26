@@ -164,9 +164,9 @@ class UserService:
             
             # Create default admin user
             admin_user = UserService.create_user(
-                username='admin',
-                email='admin@example.com',
-                password='admin123',
+                username='sundaygolfadmin',
+                email='admin@sundaygolf.com',
+                password='sundaygolf@123',
                 is_admin=True,
                 db=db
             )

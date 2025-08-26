@@ -157,6 +157,7 @@ def update_shiphero_config(current_user):
         refresh_token = data.get('refreshToken', '').strip()
         oauth_url = data.get('oauthUrl', '').strip()
         api_base_url = data.get('apiBaseUrl', '').strip()
+        default_warehouse_id = (data.get('defaultWarehouseId') or '').strip()
         
         if not refresh_token:
             return jsonify({'message': 'Refresh token is required'}), 400
@@ -168,6 +169,8 @@ def update_shiphero_config(current_user):
             return jsonify({'message': 'API base URL is required'}), 400
         
         success = config_service.update_shiphero_config(refresh_token, oauth_url, api_base_url, db)
+        if success and default_warehouse_id:
+            success = config_service.update_shiphero_default_warehouse(default_warehouse_id, db)
         if success:
             # Reload settings
             Settings.load_from_database(config_service)
@@ -213,29 +216,18 @@ def get_email_config(current_user):
     try:
         email_config = config_service.get_email_config(db)
         if email_config:
-            return jsonify({
-                'smtpHost': email_config.smtp_host,
-                'smtpPort': email_config.smtp_port,
-                'smtpUsername': email_config.smtp_username,
-                'smtpPassword': '*' * 8 if email_config.smtp_password else '',
-                'smtpUseTls': email_config.smtp_use_tls,
-                'smtpUseSsl': email_config.smtp_use_ssl,
-                'fromEmail': email_config.from_email,
-                'fromName': email_config.from_name,
-                'isActive': email_config.is_active
-            })
-        else:
-            return jsonify({
-                'smtpHost': '',
-                'smtpPort': 587,
-                'smtpUsername': '',
-                'smtpPassword': '',
-                'smtpUseTls': True,
-                'smtpUseSsl': False,
-                'fromEmail': '',
-                'fromName': 'Fulfil ShipHero Mediator',
-                'isActive': False
-            })
+            return jsonify(email_config)
+        return jsonify({
+            'smtpHost': '',
+            'smtpPort': 587,
+            'smtpUsername': '',
+            'smtpPassword': '',
+            'smtpUseTls': True,
+            'smtpUseSsl': False,
+            'fromEmail': '',
+            'fromName': 'Fulfil ShipHero Mediator',
+            'isActive': False
+        })
     except Exception as e:
         return jsonify({'message': str(e)}), 500
     finally:
@@ -305,70 +297,6 @@ def test_email_config(current_user):
     finally:
         db.close()
 
-@routes.route('/config/fulfil/test', methods=['POST'])
-@token_required
-@admin_required
-def test_fulfil_connection(current_user):
-    # Get database session for this request
-    db = next(get_db())
-    try:
-        # Get Fulfil credentials from config service
-        fulfil_config = config_service.get_fulfil_config(db)
-        
-        if not fulfil_config['subdomain'] or not fulfil_config['api_key']:
-            return jsonify({'success': False, 'message': 'Fulfil configuration not complete'})
-        
-        # Import here to avoid circular imports
-        from ..services.fulfil_client import FulfilWrapper
-        
-        # Test connection
-        fulfil_client = FulfilWrapper(fulfil_config['subdomain'], fulfil_config['api_key'])
-        # Try to get a simple endpoint to test connection
-        test_result = fulfil_client.test_connection()
-        
-        if test_result:
-            return jsonify({'success': True, 'message': 'Fulfil connection successful'})
-        else:
-            return jsonify({'success': False, 'message': 'Fulfil connection failed'})
-    except Exception as e:
-        return jsonify({'success': False, 'message': str(e)})
-    finally:
-        db.close()
-
-@routes.route('/config/shiphero/test', methods=['POST'])
-@token_required
-@admin_required
-def test_shiphero_connection(current_user):
-    # Get database session for this request
-    db = next(get_db())
-    try:
-        # Get ShipHero credentials from config service
-        shiphero_config = config_service.get_shiphero_config(db)
-        
-        if not shiphero_config['refresh_token']:
-            return jsonify({'success': False, 'message': 'ShipHero configuration not complete'})
-        
-        # Import here to avoid circular imports
-        from ..services.shiphero_client import ShipHeroClient
-        
-        # Test connection
-        shiphero_client = ShipHeroClient(
-            shiphero_config['refresh_token'],
-            shiphero_config['oauth_url'],
-            shiphero_config['api_base_url']
-        )
-        # Try to get a simple endpoint to test connection
-        test_result = shiphero_client.test_connection()
-        
-        if test_result:
-            return jsonify({'success': True, 'message': 'ShipHero connection successful'})
-        else:
-            return jsonify({'success': False, 'message': 'ShipHero connection failed'})
-    except Exception as e:
-        return jsonify({'success': False, 'message': str(e)})
-    finally:
-        db.close()
-
 @routes.route('/users', methods=['GET'])
 @token_required
 @admin_required
@@ -424,3 +352,85 @@ def create_user(current_user):
         return jsonify({'message': str(e)}), 500
     finally:
         db.close()
+
+@routes.route('/product-sync/status', methods=['GET'])
+@token_required
+def get_product_sync_status(current_user):
+    """Get the current product synchronization status"""
+    try:
+        from ..services.product_sync_service import product_sync_service
+        service = product_sync_service
+        status = service.get_sync_status()
+        return jsonify(status)
+    except Exception as e:
+        return jsonify({'message': f'Failed to get product sync status: {str(e)}'}), 500
+
+@routes.route('/product-sync/logs', methods=['GET'])
+@token_required
+def get_product_sync_logs(current_user):
+    """Get paginated product synchronization logs"""
+    from ..database.db import get_db
+    from ..models.models import ProductSyncLog, Product
+    from sqlalchemy import or_, cast
+    from sqlalchemy.types import String
+    db = next(get_db())
+    try:
+        page = int(request.args.get('page', 1))
+        per_page = int(request.args.get('per_page', 20))
+        if per_page > 100:
+            per_page = 100
+        offset = (page - 1) * per_page
+        q = (request.args.get('q') or '').strip()
+
+        base_query = db.query(ProductSyncLog).join(Product, ProductSyncLog.product_id == Product.id, isouter=True)
+
+        if q:
+            # Determine if q is numeric (possible fulfil_id)
+            is_numeric = q.isdigit()
+            like_q = f"%{q}%"
+            filters = [
+                ProductSyncLog.product_name.ilike(like_q),
+                ProductSyncLog.product_code.ilike(like_q),
+            ]
+            if is_numeric:
+                # Match fulfil_id exactly
+                filters.append(Product.fulfil_id == int(q))
+            # Also allow searching shiphero_id loosely
+            filters.append(cast(Product.shiphero_id, String).ilike(like_q))
+            base_query = base_query.filter(or_(*filters))
+        
+        total = base_query.count()
+        logs = base_query.order_by(ProductSyncLog.synced_at.desc()).offset(offset).limit(per_page).all()
+        
+        def serialize(log):
+            return {
+                'id': log.id,
+                'product_code': log.product_code,
+                'product_name': log.product_name,
+                'action': log.action,
+                'changed_fields': log.changed_fields,
+                'synced_at': log.synced_at.isoformat() if log.synced_at else None,
+            }
+        
+        return jsonify({
+            'items': [serialize(l) for l in logs],
+            'page': page,
+            'per_page': per_page,
+            'total': total,
+            'total_pages': (total + per_page - 1) // per_page
+        })
+    except Exception as e:
+        return jsonify({'message': f'Failed to get product sync logs: {str(e)}'}), 500
+    finally:
+        db.close()
+
+# Backward compatible endpoints (optional): keep existing ones if used by frontend
+@routes.route('/sync/status', methods=['GET'])
+@token_required
+def get_sync_status(current_user):
+    return get_product_sync_status(current_user)
+
+@routes.route('/sync/logs', methods=['GET'])
+@token_required
+def get_sync_logs(current_user):
+    return get_product_sync_logs(current_user)

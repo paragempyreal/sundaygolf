@@ -2,6 +2,9 @@ import axios from "axios";
 
 const API_BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:5000";
 
+// Configure axios defaults
+axios.defaults.withCredentials = true;
+
 export interface FulfilConfig {
   subdomain: string;
   apiKey: string;
@@ -11,6 +14,7 @@ export interface ShipHeroConfig {
   refreshToken: string;
   oauthUrl: string;
   apiBaseUrl: string;
+  defaultWarehouseId?: string;
 }
 
 export interface SystemConfig {
@@ -94,6 +98,7 @@ class ConfigService {
         refreshToken: config.refreshToken,
         oauthUrl: config.oauthUrl,
         apiBaseUrl: config.apiBaseUrl,
+        defaultWarehouseId: config.defaultWarehouseId || "",
       });
     } catch (error) {
       if (axios.isAxiosError(error)) {
@@ -123,42 +128,14 @@ class ConfigService {
   }
 
   async testFulfilConnection(): Promise<{ success: boolean; message: string }> {
-    try {
-      const response = await this.api.post("/api/config/fulfil/test");
-      return response.data;
-    } catch (error) {
-      if (axios.isAxiosError(error)) {
-        return {
-          success: false,
-          message: error.response?.data?.message || "Connection test failed",
-        };
-      }
-      return {
-        success: false,
-        message: "Connection test failed",
-      };
-    }
+    return { success: false, message: "Not supported" };
   }
 
   async testShipHeroConnection(): Promise<{
     success: boolean;
     message: string;
   }> {
-    try {
-      const response = await this.api.post("/api/config/shiphero/test");
-      return response.data;
-    } catch (error) {
-      if (axios.isAxiosError(error)) {
-        return {
-          success: false,
-          message: error.response?.data?.message || "Connection test failed",
-        };
-      }
-      return {
-        success: false,
-        message: "Connection test failed",
-      };
-    }
+    return { success: false, message: "Not supported" };
   }
 
   // Email Configuration Methods
@@ -248,6 +225,51 @@ class ConfigService {
         );
       }
       throw new Error("Failed to create user");
+    }
+  }
+
+  // Product sync
+  async getProductSyncStatus(): Promise<any> {
+    try {
+      const response = await this.api.get("/api/product-sync/status");
+      return response.data;
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        throw new Error(
+          error.response?.data?.message || "Failed to fetch product sync status"
+        );
+      }
+      throw new Error("Failed to fetch product sync status");
+    }
+  }
+
+  async getProductSyncLogs(
+    page = 1,
+    perPage = 20,
+    q?: string
+  ): Promise<{
+    items: any[];
+    page: number;
+    per_page: number;
+    total: number;
+    total_pages: number;
+  }> {
+    try {
+      const params = new URLSearchParams();
+      params.set("page", String(page));
+      params.set("per_page", String(perPage));
+      if (q && q.trim()) params.set("q", q.trim());
+      const response = await this.api.get(
+        `/api/product-sync/logs?${params.toString()}`
+      );
+      return response.data;
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        throw new Error(
+          error.response?.data?.message || "Failed to fetch product sync logs"
+        );
+      }
+      throw new Error("Failed to fetch product sync logs");
     }
   }
 }

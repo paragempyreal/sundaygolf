@@ -3,13 +3,10 @@ from sqlalchemy import text
 from mediator.configs.settings import settings
 from mediator.database.db import engine, SessionLocal
 from mediator.controllers.routes import routes
-from mediator.services.fulfil_client import FulfilWrapper
-from mediator.services.shiphero_client import ShipHeroClient
-from mediator.controllers.sync_logic import SyncService
-from mediator.controllers.scheduler import start as start_scheduler
 from mediator.models.models import Base
 from mediator.services.config_service import config_service
 from mediator.services.user_service import user_service
+from datetime import datetime
 
 def initialize_database():
     """Initialize database with default configuration and admin user"""
@@ -44,7 +41,7 @@ def create_app():
     
     # Enable CORS
     from flask_cors import CORS
-    CORS(app)
+    CORS(app, origins=settings.CORS_ORIGINS.split(','), supports_credentials=True)
     
     # Ensure DB connectivity early
     with engine.connect() as conn:
@@ -62,19 +59,40 @@ def create_app():
     # Register the routes blueprint
     app.register_blueprint(routes, url_prefix='/api')
 
-    # Wire clients and service with current configuration
-    fulfil = FulfilWrapper(settings.FULFIL_SUBDOMAIN, settings.FULFIL_API_KEY)
-    shiphero = ShipHeroClient(settings.SHIPHERO_REFRESH_TOKEN, settings.SHIPHERO_OAUTH_URL, settings.SHIPHERO_API_BASE_URL)
-    svc = SyncService(fulfil, shiphero)
+    # Set up background sync task
+    from .services.product_sync_service import product_sync_service
+    import threading
+    import time
+    
+    def periodic_sync():
+        """Periodically sync products"""
+        while True:
+            try:
+                # Re-read latest poll interval from DB each cycle so changes apply without restart
+                try:
+                    settings.load_from_database(config_service)
+                except Exception as reload_err:
+                    print(f"Warning: could not reload settings from DB: {reload_err}")
+                interval_minutes = max(1, int(settings.POLL_INTERVAL_MINUTES or 5))
+                time.sleep(interval_minutes * 60)  # Convert minutes to seconds
+                print(f"Starting periodic product sync at {datetime.now()}")
+                
+                # Perform actual sync
+                try:
+                    result = product_sync_service.sync_all_products()
+                    print(f"Periodic sync completed successfully: {result}")
+                except Exception as sync_error:
+                    print(f"Error during periodic sync: {sync_error}")
+            except Exception as e:
+                print(f"Error in periodic sync: {e}")
+    
+    # Start background sync thread
+    sync_thread = threading.Thread(target=periodic_sync, daemon=True)
+    sync_thread.start()
+    print("Background sync thread started")
 
-    # Start scheduler with proper error handling
-    try:
-        start_scheduler(svc, minutes=settings.POLL_INTERVAL_MINUTES)
-        print(f"Scheduler started successfully with {settings.POLL_INTERVAL_MINUTES} minute interval")
-    except Exception as e:
-        print(f"Failed to start scheduler: {e}")
-        # Continue app startup even if scheduler fails
+    # Run the app on the specified port
+    app.run(port=int(settings.APP_PORT))
 
     return app
-
 # For gunicorn: mediator.app:create_app()

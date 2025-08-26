@@ -5,74 +5,29 @@ import {
   BarChart3,
   Database,
   RefreshCw,
-  AlertTriangle,
-  CheckCircle,
   Users,
   Settings,
   Mail,
 } from "lucide-react";
 import toast from "react-hot-toast";
 
-interface SystemStatus {
-  fulfil: boolean;
-  shiphero: boolean;
-  email: boolean;
-  lastSync: string | null;
-  syncStatus: "idle" | "running" | "success" | "error";
-}
-
 const Dashboard: React.FC = () => {
   const { user } = useAuth();
-  const [systemStatus, setSystemStatus] = useState<SystemStatus>({
-    fulfil: false,
-    shiphero: false,
-    email: false,
-    lastSync: null,
-    syncStatus: "idle",
-  });
   const [isLoading, setIsLoading] = useState(true);
   const [configStatus, setConfigStatus] = useState({
     fulfilConfigured: false,
     shipheroConfigured: false,
     emailConfigured: false,
   });
+  const [lastSyncTime, setLastSyncTime] = useState<string>("Never");
 
   useEffect(() => {
-    loadSystemStatus();
     loadConfigurationStatus();
   }, []);
 
-  const loadSystemStatus = async () => {
-    try {
-      setIsLoading(true);
-      // Test connections
-      const fulfilTest = await configService.testFulfilConnection();
-      const shipheroTest = await configService.testShipHeroConnection();
-
-      // Check email configuration
-      let emailTest = { success: false, message: "Not configured" };
-      try {
-        emailTest = await configService.testEmailConfig();
-      } catch (error) {
-        // Email not configured yet
-      }
-
-      setSystemStatus({
-        fulfil: fulfilTest.success,
-        shiphero: shipheroTest.success,
-        email: emailTest.success,
-        lastSync: new Date().toISOString(), // This would come from backend
-        syncStatus: "idle",
-      });
-    } catch (error) {
-      toast.error("Failed to load system status");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const loadConfigurationStatus = async () => {
     try {
+      setIsLoading(true);
       const config = await configService.getConfig();
       setConfigStatus({
         fulfilConfigured: !!(config.fulfil.subdomain && config.fulfil.apiKey),
@@ -93,30 +48,19 @@ const Dashboard: React.FC = () => {
       } catch (error) {
         // Email not configured yet
       }
+
+      // Load product sync status
+      try {
+        const syncStatus = await configService.getProductSyncStatus();
+        setLastSyncTime(syncStatus.last_synced_at || "Never");
+      } catch (error) {
+        console.error("Failed to load product sync status:", error);
+      }
     } catch (error) {
       console.error("Failed to load configuration status:", error);
+    } finally {
+      setIsLoading(false);
     }
-  };
-
-  const handleTestConnections = async () => {
-    await loadSystemStatus();
-    toast.success("Connection tests completed");
-  };
-
-  const getStatusIcon = (status: boolean) => {
-    return status ? (
-      <CheckCircle className="h-6 w-6 text-green-500" />
-    ) : (
-      <AlertTriangle className="h-6 w-6 text-red-500" />
-    );
-  };
-
-  const getStatusText = (status: boolean) => {
-    return status ? "Connected" : "Disconnected";
-  };
-
-  const getStatusColor = (status: boolean) => {
-    return status ? "text-green-600" : "text-red-600";
   };
 
   const getConfigStatusText = (configured: boolean) => {
@@ -148,19 +92,10 @@ const Dashboard: React.FC = () => {
             )}
           </p>
         </div>
-        <div className="mt-4 sm:mt-0">
-          <button
-            onClick={handleTestConnections}
-            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-          >
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Test Connections
-          </button>
-        </div>
       </div>
 
       {/* Status Cards */}
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
         {/* Fulfil Status */}
         <div className="bg-white overflow-hidden shadow rounded-lg">
           <div className="p-5">
@@ -173,14 +108,7 @@ const Dashboard: React.FC = () => {
                   <dt className="text-sm font-medium text-gray-500 truncate">
                     Fulfil Connection
                   </dt>
-                  <dd className="flex items-center text-sm font-medium text-gray-900">
-                    {getStatusIcon(systemStatus.fulfil)}
-                    <span
-                      className={`ml-2 ${getStatusColor(systemStatus.fulfil)}`}
-                    >
-                      {getStatusText(systemStatus.fulfil)}
-                    </span>
-                  </dd>
+                  {/* Connection status removed */}
                   <dd
                     className={`text-xs ${getConfigStatusColor(
                       configStatus.fulfilConfigured
@@ -206,16 +134,7 @@ const Dashboard: React.FC = () => {
                   <dt className="text-sm font-medium text-gray-500 truncate">
                     ShipHero Connection
                   </dt>
-                  <dd className="flex items-center text-sm font-medium text-gray-900">
-                    {getStatusIcon(systemStatus.shiphero)}
-                    <span
-                      className={`ml-2 ${getStatusColor(
-                        systemStatus.shiphero
-                      )}`}
-                    >
-                      {getStatusText(systemStatus.shiphero)}
-                    </span>
-                  </dd>
+                  {/* Connection status removed */}
                   <dd
                     className={`text-xs ${getConfigStatusColor(
                       configStatus.shipheroConfigured
@@ -241,14 +160,7 @@ const Dashboard: React.FC = () => {
                   <dt className="text-sm font-medium text-gray-500 truncate">
                     Email Service
                   </dt>
-                  <dd className="flex items-center text-sm font-medium text-gray-900">
-                    {getStatusIcon(systemStatus.email)}
-                    <span
-                      className={`ml-2 ${getStatusColor(systemStatus.email)}`}
-                    >
-                      {getStatusText(systemStatus.email)}
-                    </span>
-                  </dd>
+                  {/* Connection status removed */}
                   <dd
                     className={`text-xs ${getConfigStatusColor(
                       configStatus.emailConfigured
@@ -262,7 +174,7 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Sync Status */}
+        {/* Last Sync */}
         <div className="bg-white overflow-hidden shadow rounded-lg">
           <div className="p-5">
             <div className="flex items-center">
@@ -274,34 +186,13 @@ const Dashboard: React.FC = () => {
                   <dt className="text-sm font-medium text-gray-500 truncate">
                     Last Sync
                   </dt>
-                  <dd className="text-sm font-medium text-gray-900">
-                    {systemStatus.lastSync
-                      ? new Date(systemStatus.lastSync).toLocaleString()
-                      : "Never"}
-                  </dd>
-                </dl>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* User Status */}
-        <div className="bg-white overflow-hidden shadow rounded-lg">
-          <div className="p-5">
-            <div className="flex items-center">
-              <div className="flex-shrink-0">
-                <Users className="h-6 w-6 text-pink-600" />
-              </div>
-              <div className="ml-5 w-0 flex-1">
-                <dl>
-                  <dt className="text-sm font-medium text-gray-500 truncate">
-                    User Role
-                  </dt>
-                  <dd className="text-sm font-medium text-gray-900">
-                    {user?.isAdmin ? "Administrator" : "User"}
-                  </dd>
-                  <dd className="text-xs text-gray-500">
-                    {user?.isActive ? "Active" : "Inactive"}
+                  <dd
+                    className="text-sm font-medium text-gray-900"
+                    id="last-sync-time"
+                  >
+                    {lastSyncTime === "Never"
+                      ? "Never"
+                      : new Date(lastSyncTime).toLocaleString()}
                   </dd>
                 </dl>
               </div>

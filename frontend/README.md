@@ -120,7 +120,7 @@ The application uses JWT tokens for authentication with database-based user mana
 ### ShipHero Configuration
 
 - **Refresh Token**: Your ShipHero OAuth refresh token
-- **OAuth URL**: ShipHero OAuth endpoint (default: `https://public-api.shiphero.com/oauth`)
+- **OAuth URL**: ShipHero OAuth endpoint (default: `https://public-api.shiphero.com/auth/refresh`)
 - **API Base URL**: ShipHero API base URL (default: `https://public-api.shiphero.com`)
 
 ### System Configuration

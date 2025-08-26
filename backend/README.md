@@ -1,13 +1,13 @@
 # Fulfil → ShipHero Mediator
 
-A Python service that polls Fulfil products and syncs them to ShipHero, while maintaining a local Postgres record for auditing and idempotency.
+A Python service that polls Fulfil products and syncs them to ShipHero, while maintaining a local Postgres record for auditing and idempotency. The service provides both automated periodic sync and on-demand sync capabilities.
 
 ## Features
 
 - Polling-based delta sync using Fulfil `write_date`
 - ShipHero GraphQL upserts (create/update) with unit conversion
 - Idempotent pushes via payload hashing
-- APScheduler for periodic jobs
+- Threading-based periodic jobs
 - Flask health endpoint
 - Postgres persistence with SQLAlchemy + Alembic
 - Dockerized dev stack
@@ -21,7 +21,7 @@ A Python service that polls Fulfil products and syncs them to ShipHero, while ma
 ### 1) Prereqs
 
 - Docker & Docker Compose (or Podman equivalents)
-- Fulfil API credentials
+- Fulfil 3PL API credentials
 - ShipHero OAuth credentials (client ID, client secret, refresh token)
 
 ### 2) Configure
@@ -29,9 +29,9 @@ A Python service that polls Fulfil products and syncs them to ShipHero, while ma
 Copy `.env.example` → `.env` and fill values:
 
 ```bash
-# Required: Fulfil credentials
+# Required: Fulfil 3PL API credentials
 FULFIL_SUBDOMAIN=your-subdomain
-FULFIL_API_KEY=your-api-key
+FULFIL_API_KEY=your-3pl-api-key
 
 # Required: ShipHero OAuth credentials
 SHIPHERO_REFRESH_TOKEN=your-refresh-token
@@ -42,7 +42,7 @@ SHIPHERO_TOKEN_EXPIRES_IN=3600
 
 # Optional: ShipHero API configuration (defaults to production)
 SHIPHERO_API_BASE_URL=https://public-api.shiphero.com
-SHIPHERO_OAUTH_URL=https://public-api.shiphero.com/oauth
+SHIPHERO_OAUTH_URL=https://public-api.shiphero.com/auth/refresh
 
 # Database
 DATABASE_URL=postgresql://user:pass@localhost/fulfil_shiphero
@@ -80,7 +80,15 @@ docker compose exec app alembic upgrade head
 curl http://localhost:8000/health
 ```
 
-### 7) Scheduler Status
+### 7) API Endpoints
+
+The service provides the following API endpoints:
+
+- `GET /health` - Health check endpoint
+- `GET /sync/status` - Get current sync status
+- `GET /sync/logs` - Get recent sync logs
+
+### 8) Scheduler Status
 
 The service automatically starts a background scheduler that runs delta sync operations every `POLL_INTERVAL_MINUTES` (default: 5 minutes). The scheduler will:
 
@@ -110,6 +118,27 @@ FLASK_APP=mediator.app:app flask run --port 8000
 ```
 
 ## Advanced Features
+
+### Product Data Sync
+
+The service synchronizes the following product information between Fulfil and ShipHero:
+
+- Variant Name
+- Code
+- Media (Images)
+- UPC
+- ASIN
+- Buyer SKU
+- Weight
+- Length, Width, Height
+- Dimension Unit
+- Weight UOM
+- Country of Origin
+- HS Code
+- Quantity per Case
+- Unit of Measure
+- Fulfil Product ID (stored in mediator database for tracking)
+- ShipHero Product ID (stored in mediator database for tracking)
 
 ### On-Demand Product Sync
 
