@@ -8,3 +8,4 @@ python-dotenv==1.0.0
 psycopg[binary]==3.2.9
 alembic==1.12.0
 SQLAlchemy==2.0.43
+requests==2.31.0
