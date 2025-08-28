@@ -11,6 +11,7 @@ import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Configuration from "./pages/Configuration";
 import ProductSync from "./pages/SyncStatus";
+import ProductSyncChecker from "./pages/ProductSyncChecker";
 import Layout from "./components/Layout";
 
 const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({
@@ -35,6 +36,7 @@ const AppRoutes: React.FC = () => {
       >
         <Route index element={<Dashboard />} />
         <Route path="product-sync" element={<ProductSync />} />
+        <Route path="product-sync/checker" element={<ProductSyncChecker />} />
         <Route path="configuration" element={<Configuration />} />
       </Route>
     </Routes>

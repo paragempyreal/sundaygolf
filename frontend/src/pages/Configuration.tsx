@@ -43,15 +43,31 @@ const Configuration: React.FC = () => {
 
   // Configuration states
   const [fulfilConfig, setFulfilConfig] = useState<FulfilConfig>({
-    subdomain: "",
-    apiKey: "",
+    mode: "live",
+    live: {
+      subdomain: "",
+      apiKey: "",
+    },
+    test: {
+      subdomain: "",
+      apiKey: "",
+    },
   });
 
   const [shipheroConfig, setShipHeroConfig] = useState<ShipHeroConfig>({
-    refreshToken: "",
-    oauthUrl: "https://public-api.shiphero.com/auth/refresh",
-    apiBaseUrl: "https://public-api.shiphero.com",
-    defaultWarehouseId: "",
+    mode: "live",
+    live: {
+      refreshToken: "",
+      oauthUrl: "https://public-api.shiphero.com/auth/refresh",
+      apiBaseUrl: "https://public-api.shiphero.com",
+      defaultWarehouseId: "",
+    },
+    test: {
+      refreshToken: "",
+      oauthUrl: "https://public-api.shiphero.com/auth/refresh",
+      apiBaseUrl: "https://public-api.shiphero.com",
+      defaultWarehouseId: "",
+    },
   });
 
   const [systemConfig, setSystemConfig] = useState<SystemConfig>({
@@ -276,56 +292,124 @@ const Configuration: React.FC = () => {
             <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
               Fulfil Configuration
             </h3>
-            <div className="space-y-4">
-              <div>
-                <label
-                  htmlFor="fulfil-subdomain"
-                  className="block text-sm font-medium text-gray-700"
-                >
-                  Subdomain
-                </label>
-                <input
-                  type="text"
-                  id="fulfil-subdomain"
-                  value={fulfilConfig.subdomain}
-                  onChange={(e) =>
-                    setFulfilConfig({
-                      ...fulfilConfig,
-                      subdomain: e.target.value,
-                    })
-                  }
-                  className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
-                  placeholder="yourcompany"
-                />
+
+            {/* Mode Selection */}
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Live Configuration */}
+              <div className="space-y-4">
+                <h4 className="text-md font-medium text-gray-900 border-b pb-2">
+                  Live Environment
+                </h4>
+                <div>
+                  <label
+                    htmlFor="fulfil-live-subdomain"
+                    className="block text-sm font-medium text-gray-700"
+                  >
+                    Subdomain
+                  </label>
+                  <input
+                    type="text"
+                    id="fulfil-live-subdomain"
+                    value={fulfilConfig.live.subdomain}
+                    onChange={(e) =>
+                      setFulfilConfig({
+                        ...fulfilConfig,
+                        live: {
+                          ...fulfilConfig.live,
+                          subdomain: e.target.value,
+                        },
+                      })
+                    }
+                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                    placeholder="yourcompany"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="fulfil-live-api-key"
+                    className="block text-sm font-medium text-gray-700"
+                  >
+                    API Key
+                  </label>
+                  <input
+                    type="text"
+                    id="fulfil-live-api-key"
+                    value={fulfilConfig.live.apiKey}
+                    onChange={(e) =>
+                      setFulfilConfig({
+                        ...fulfilConfig,
+                        live: { ...fulfilConfig.live, apiKey: e.target.value },
+                      })
+                    }
+                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                    placeholder="Enter your Fulfil Live API key"
+                  />
+                </div>
               </div>
-              <div>
-                <label
-                  htmlFor="fulfil-api-key"
-                  className="block text-sm font-medium text-gray-700"
-                >
-                  API Key
-                </label>
-                <input
-                  type="password"
-                  id="fulfil-api-key"
-                  value={fulfilConfig.apiKey}
-                  onChange={(e) =>
-                    setFulfilConfig({ ...fulfilConfig, apiKey: e.target.value })
-                  }
-                  className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
-                  placeholder="Enter your Fulfil API key"
-                />
+
+              {/* Test Configuration */}
+              <div className="space-y-4">
+                <h4 className="text-md font-medium text-gray-900 border-b pb-2">
+                  Test Environment
+                </h4>
+                <div>
+                  <label
+                    htmlFor="fulfil-test-subdomain"
+                    className="block text-sm font-medium text-gray-700"
+                  >
+                    Subdomain
+                  </label>
+                  <input
+                    type="text"
+                    id="fulfil-test-subdomain"
+                    value={fulfilConfig.test.subdomain}
+                    onChange={(e) =>
+                      setFulfilConfig({
+                        ...fulfilConfig,
+                        test: {
+                          ...fulfilConfig.test,
+                          subdomain: e.target.value,
+                        },
+                      })
+                    }
+                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                    placeholder="yourcompany-test"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="fulfil-test-api-key"
+                    className="block text-sm font-medium text-gray-700"
+                  >
+                    API Key
+                  </label>
+                  <input
+                    type="text"
+                    id="fulfil-test-api-key"
+                    value={fulfilConfig.test.apiKey}
+                    onChange={(e) =>
+                      setFulfilConfig({
+                        ...fulfilConfig,
+                        test: { ...fulfilConfig.test, apiKey: e.target.value },
+                      })
+                    }
+                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                    placeholder="Enter your Fulfil Test API key"
+                  />
+                </div>
               </div>
-              <div className="flex space-x-3">
-                <button
-                  onClick={handleSaveFulfil}
-                  disabled={isSaving}
-                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50"
-                >
-                  <Save className="h-4 w-4 mr-2" />
-                  {isSaving ? "Saving..." : "Save Configuration"}
-                </button>
-              </div>
+            </div>
+
+            <div className="flex space-x-3 mt-6">
+              <button
+                onClick={handleSaveFulfil}
+                disabled={isSaving}
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50"
+              >
+                <Save className="h-4 w-4 mr-2" />
+                {isSaving ? "Saving..." : "Save Configuration"}
+              </button>
             </div>
           </div>
         )}
@@ -335,103 +419,222 @@ const Configuration: React.FC = () => {
             <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4">
               ShipHero Configuration
             </h3>
-            <div className="space-y-4">
-              <div>
-                <label
-                  htmlFor="shiphero-refresh-token"
-                  className="block text-sm font-medium text-gray-700"
-                >
-                  Refresh Token
-                </label>
-                <input
-                  type="password"
-                  id="shiphero-refresh-token"
-                  value={shipheroConfig.refreshToken}
-                  onChange={(e) =>
-                    setShipHeroConfig({
-                      ...shipheroConfig,
-                      refreshToken: e.target.value,
-                    })
-                  }
-                  className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
-                  placeholder="Enter your ShipHero refresh token"
-                />
+
+            {/* Mode Selection */}
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              {/* Live Configuration */}
+              <div className="space-y-4">
+                <h4 className="text-md font-medium text-gray-900 border-b pb-2">
+                  Live Environment
+                </h4>
+                <div>
+                  <label
+                    htmlFor="shiphero-live-refresh-token"
+                    className="block text-sm font-medium text-gray-700"
+                  >
+                    Refresh Token
+                  </label>
+                  <input
+                    type="text"
+                    id="shiphero-live-refresh-token"
+                    value={shipheroConfig.live.refreshToken}
+                    onChange={(e) =>
+                      setShipHeroConfig({
+                        ...shipheroConfig,
+                        live: {
+                          ...shipheroConfig.live,
+                          refreshToken: e.target.value,
+                        },
+                      })
+                    }
+                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                    placeholder="Enter your ShipHero live refresh token"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="shiphero-live-oauth-url"
+                    className="block text-sm font-medium text-gray-700"
+                  >
+                    OAuth URL
+                  </label>
+                  <input
+                    type="url"
+                    id="shiphero-live-oauth-url"
+                    value={shipheroConfig.live.oauthUrl}
+                    onChange={(e) =>
+                      setShipHeroConfig({
+                        ...shipheroConfig,
+                        live: {
+                          ...shipheroConfig.live,
+                          oauthUrl: e.target.value,
+                        },
+                      })
+                    }
+                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="shiphero-live-api-base-url"
+                    className="block text-sm font-medium text-gray-700"
+                  >
+                    API Base URL
+                  </label>
+                  <input
+                    type="url"
+                    id="shiphero-live-api-base-url"
+                    value={shipheroConfig.live.apiBaseUrl}
+                    onChange={(e) =>
+                      setShipHeroConfig({
+                        ...shipheroConfig,
+                        live: {
+                          ...shipheroConfig.live,
+                          apiBaseUrl: e.target.value,
+                        },
+                      })
+                    }
+                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="shiphero-live-default-warehouse-id"
+                    className="block text-sm font-medium text-gray-700"
+                  >
+                    Default Warehouse ID
+                  </label>
+                  <input
+                    type="text"
+                    id="shiphero-live-default-warehouse-id"
+                    value={shipheroConfig.live.defaultWarehouseId || ""}
+                    onChange={(e) =>
+                      setShipHeroConfig({
+                        ...shipheroConfig,
+                        live: {
+                          ...shipheroConfig.live,
+                          defaultWarehouseId: e.target.value,
+                        },
+                      })
+                    }
+                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                    placeholder="V2FyZWhvdXNlOjEyMzQ="
+                  />
+                </div>
               </div>
-              <div>
-                <label
-                  htmlFor="shiphero-oauth-url"
-                  className="block text-sm font-medium text-gray-700"
-                >
-                  OAuth URL
-                </label>
-                <input
-                  type="url"
-                  id="shiphero-oauth-url"
-                  value={shipheroConfig.oauthUrl}
-                  onChange={(e) =>
-                    setShipHeroConfig({
-                      ...shipheroConfig,
-                      oauthUrl: e.target.value,
-                    })
-                  }
-                  className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
-                />
+
+              {/* Test Configuration */}
+              <div className="space-y-4">
+                <h4 className="text-md font-medium text-gray-900 border-b pb-2">
+                  Test Environment
+                </h4>
+                <div>
+                  <label
+                    htmlFor="shiphero-test-refresh-token"
+                    className="block text-sm font-medium text-gray-700"
+                  >
+                    Refresh Token
+                  </label>
+                  <input
+                    type="text"
+                    id="shiphero-test-refresh-token"
+                    value={shipheroConfig.test.refreshToken}
+                    onChange={(e) =>
+                      setShipHeroConfig({
+                        ...shipheroConfig,
+                        test: {
+                          ...shipheroConfig.test,
+                          refreshToken: e.target.value,
+                        },
+                      })
+                    }
+                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                    placeholder="Enter your ShipHero test refresh token"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="shiphero-test-oauth-url"
+                    className="block text-sm font-medium text-gray-700"
+                  >
+                    OAuth URL
+                  </label>
+                  <input
+                    type="url"
+                    id="shiphero-test-oauth-url"
+                    value={shipheroConfig.test.oauthUrl}
+                    onChange={(e) =>
+                      setShipHeroConfig({
+                        ...shipheroConfig,
+                        test: {
+                          ...shipheroConfig.test,
+                          oauthUrl: e.target.value,
+                        },
+                      })
+                    }
+                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="shiphero-test-api-base-url"
+                    className="block text-sm font-medium text-gray-700"
+                  >
+                    API Base URL
+                  </label>
+                  <input
+                    type="url"
+                    id="shiphero-test-api-base-url"
+                    value={shipheroConfig.test.apiBaseUrl}
+                    onChange={(e) =>
+                      setShipHeroConfig({
+                        ...shipheroConfig,
+                        test: {
+                          ...shipheroConfig.test,
+                          apiBaseUrl: e.target.value,
+                        },
+                      })
+                    }
+                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="shiphero-test-default-warehouse-id"
+                    className="block text-sm font-medium text-gray-700"
+                  >
+                    Default Warehouse ID
+                  </label>
+                  <input
+                    type="text"
+                    id="shiphero-test-default-warehouse-id"
+                    value={shipheroConfig.test.defaultWarehouseId || ""}
+                    onChange={(e) =>
+                      setShipHeroConfig({
+                        ...shipheroConfig,
+                        test: {
+                          ...shipheroConfig.test,
+                          defaultWarehouseId: e.target.value,
+                        },
+                      })
+                    }
+                    className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                    placeholder="V2FyZWhvdXNlOjEyMzQ="
+                  />
+                </div>
               </div>
-              <div>
-                <label
-                  htmlFor="shiphero-api-base-url"
-                  className="block text-sm font-medium text-gray-700"
-                >
-                  API Base URL
-                </label>
-                <input
-                  type="url"
-                  id="shiphero-api-base-url"
-                  value={shipheroConfig.apiBaseUrl}
-                  onChange={(e) =>
-                    setShipHeroConfig({
-                      ...shipheroConfig,
-                      apiBaseUrl: e.target.value,
-                    })
-                  }
-                  className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
-                />
-              </div>
-              <div>
-                <label
-                  htmlFor="shiphero-default-warehouse-id"
-                  className="block text-sm font-medium text-gray-700"
-                >
-                  Default Warehouse ID
-                </label>
-                <input
-                  type="text"
-                  id="shiphero-default-warehouse-id"
-                  value={shipheroConfig.defaultWarehouseId || ""}
-                  onChange={(e) =>
-                    setShipHeroConfig({
-                      ...shipheroConfig,
-                      defaultWarehouseId: e.target.value,
-                    })
-                  }
-                  className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
-                  placeholder="V2FyZWhvdXNlOjEyMzQ="
-                />
-                <p className="mt-1 text-sm text-gray-500">
-                  Used when creating products in ShipHero to satisfy required
-                  warehouse_products.
-                </p>
-              </div>
-              <div className="flex space-x-3">
-                <button
-                  onClick={handleSaveShipHero}
-                  disabled={isSaving}
-                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50"
-                >
-                  <Save className="h-4 w-4 mr-2" />
-                  {isSaving ? "Saving..." : "Save Configuration"}
-                </button>
-              </div>
+            </div>
+
+            <div className="flex space-x-3 mt-6">
+              <button
+                onClick={handleSaveShipHero}
+                disabled={isSaving}
+                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50"
+              >
+                <Save className="h-4 w-4 mr-2" />
+                {isSaving ? "Saving..." : "Save Configuration"}
+              </button>
             </div>
           </div>
         )}
@@ -562,7 +765,7 @@ const Configuration: React.FC = () => {
                     SMTP Password
                   </label>
                   <input
-                    type="password"
+                    type="text"
                     id="smtp-password"
                     value={emailConfig.smtpPassword}
                     onChange={(e) =>

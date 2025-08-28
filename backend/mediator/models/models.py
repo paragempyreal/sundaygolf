@@ -1,5 +1,5 @@
 from sqlalchemy.orm import declarative_base, Mapped, mapped_column
-from sqlalchemy import Text, TIMESTAMP, Boolean, Numeric, Integer
+from sqlalchemy import Text, TIMESTAMP, Boolean, Numeric, Integer, UniqueConstraint, Index
 from sqlalchemy.sql import func
 
 Base = declarative_base()
@@ -27,18 +27,25 @@ class User(Base):
 
 class Product(Base):
     __tablename__ = "products"
+    __table_args__ = (
+        UniqueConstraint('mode', 'fulfil_id', name='uq_products_mode_fulfil_id'),
+        UniqueConstraint('mode', 'code', name='uq_products_mode_code'),
+        Index('ix_products_mode', 'mode'),
+    )
     
     # Primary key
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    # Environment mode: 'live' or 'test'
+    mode: Mapped[str] = mapped_column(Text, nullable=False, default='live')
     
-    # Fulfil Product ID
-    fulfil_id: Mapped[int] = mapped_column(Integer, unique=True, nullable=False)
+    # Fulfil Product ID (unique per mode)
+    fulfil_id: Mapped[int] = mapped_column(Integer, nullable=False)
     
     # ShipHero Product ID
     shiphero_id: Mapped[str] = mapped_column(Text, nullable=True)
 
-    # Fulfil product identifiers
-    code: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
+    # Fulfil product identifiers (unique per mode)
+    code: Mapped[str] = mapped_column(Text, nullable=False)
     name: Mapped[str] = mapped_column(Text, nullable=False)
     template_name: Mapped[str] = mapped_column(Text, nullable=True)
     category_name: Mapped[str] = mapped_column(Text, nullable=True)
@@ -110,16 +117,58 @@ class Product(Base):
     
     def to_shiphero_dict(self):
         """Convert product to ShipHero API format"""
-        return {
+        # Convert dimensions from cm to inches if cm values exist, otherwise use inch values
+        def get_dimension_in_inches(cm_value, inch_value):
+            if cm_value is not None:
+                # Convert Decimal to float first, then convert cm to inches (1 cm = 0.393701 inches)
+                cm_float = float(cm_value) if hasattr(cm_value, '__float__') else float(cm_value or 0)
+                return round(cm_float * 0.393701, 4)
+            elif inch_value is not None:
+                # Convert Decimal to float
+                return float(inch_value) if hasattr(inch_value, '__float__') else float(inch_value or 0)
+            return 0.0
+        
+        # Convert weight from grams to pounds if gm values exist, otherwise use oz values
+        def get_weight_in_pounds(gm_value, oz_value):
+            if gm_value is not None:
+                # Convert Decimal to float first, then convert grams to pounds (1 gram = 0.00220462 pounds)
+                gm_float = float(gm_value) if hasattr(gm_value, '__float__') else float(gm_value or 0)
+                return round(gm_float * 0.00220462, 4)
+            elif oz_value is not None:
+                # Convert Decimal to float first, then convert ounces to pounds (1 ounce = 0.0625 pounds)
+                oz_float = float(oz_value) if hasattr(oz_value, '__float__') else float(oz_value or 0)
+                return round(oz_float * 0.0625, 4)
+            return 0.0
+        
+        # Get dimensions in inches
+        length_inches = get_dimension_in_inches(self.length_cm, self.length_in)
+        width_inches = get_dimension_in_inches(self.width_cm, self.width_in)
+        height_inches = get_dimension_in_inches(self.height_cm, self.height_in)
+        
+        # Get weight in pounds
+        weight_pounds = get_weight_in_pounds(self.weight_gm, self.weight_oz)
+        
+        # Ensure we have valid numeric values
+        if not isinstance(length_inches, (int, float)) or length_inches < 0:
+            length_inches = 0.0
+        if not isinstance(width_inches, (int, float)) or width_inches < 0:
+            width_inches = 0.0
+        if not isinstance(height_inches, (int, float)) or height_inches < 0:
+            height_inches = 0.0
+        if not isinstance(weight_pounds, (int, float)) or weight_pounds < 0:
+            weight_pounds = 0.0
+        
+        # Try sending weight as a separate field first, then in dimensions
+        base_data = {
             "name": self.name,
             "sku": self.code,
             "barcode": self.upc or self.code,
             "country_of_manufacture": self.country_of_origin or "US",
             "dimensions": {
-                "weight": str(self.weight_gm or 0),
-                "height": str(self.height_cm or 0),
-                "width": str(self.width_cm or 0),
-                "length": str(self.length_cm or 0)
+                "height": height_inches,      # Send as numeric value
+                "width": width_inches,        # Send as numeric value
+                "length": length_inches       # Send as numeric value
+                # Removed weight from dimensions - ShipHero might expect it elsewhere
             },
             "tariff_code": self.hs_code,
             "customs_description": self.customs_description or self.name,
@@ -131,10 +180,21 @@ class Product(Base):
             "not_owned": False,
             "dropship": False
         }
+        
+        # Add weight as a separate field if it's not zero
+        if weight_pounds > 0:
+            base_data["weight"] = weight_pounds
+        
+        return base_data
 
 class ProductSyncLog(Base):
     __tablename__ = "product_sync_logs"
+    __table_args__ = (
+        Index('ix_product_sync_logs_mode', 'mode'),
+    )
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    # Environment mode: 'live' or 'test'
+    mode: Mapped[str] = mapped_column(Text, nullable=False, default='live')
     product_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     product_code: Mapped[str] = mapped_column(Text, nullable=False)
     product_name: Mapped[str] = mapped_column(Text, nullable=False)

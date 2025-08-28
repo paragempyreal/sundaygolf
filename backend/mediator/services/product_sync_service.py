@@ -34,13 +34,17 @@ class ProductSyncService:
         self.fulfil_service = None
         self.shiphero_service = None
         self._initialize_services()
+        # Snapshot of the mode used for the current sync run
+        self.current_sync_mode: Optional[str] = None
     
     def _initialize_services(self) -> None:
-        """Initialize Fulfil and ShipHero services with configuration"""
+        """Initialize Fulfil and ShipHero services with configuration for current configured mode"""
         try:
-            # Get configuration
-            fulfil_config = config_service.get_fulfil_config(self.db_session)
-            shiphero_config = config_service.get_shiphero_config(self.db_session)
+            # Determine current configured mode
+            mode = config_service.get_sync_mode(self.db_session)
+            # Get configuration for that mode
+            fulfil_config = config_service.get_fulfil_config_for_mode(mode, self.db_session)
+            shiphero_config = config_service.get_shiphero_config_for_mode(mode, self.db_session)
             
             # Initialize Fulfil service if configuration is available
             if fulfil_config.get('subdomain') and fulfil_config.get('api_key'):
@@ -61,6 +65,30 @@ class ProductSyncService:
         except Exception as e:
             logger.error(f"Failed to initialize services: {str(e)}")
     
+    def reload_configuration(self) -> None:
+        """Reload configuration and reinitialize services (useful when mode changes)"""
+        try:
+            logger.info("Reloading sync service configuration...")
+            # Clear current services
+            self.fulfil_service = None
+            self.shiphero_service = None
+            # Clear current sync mode snapshot
+            self.current_sync_mode = None
+            # Reinitialize with fresh configuration
+            self._initialize_services()
+            logger.info("Sync service configuration reloaded successfully")
+        except Exception as e:
+            logger.error(f"Failed to reload sync service configuration: {str(e)}")
+    
+    def get_current_sync_mode(self) -> str:
+        """
+        Get the current configured mode
+        
+        Returns:
+            The current configured mode
+        """
+        return self.current_sync_mode or config_service.get_sync_mode(self.db_session)
+    
     def _should_perform_initial_sync(self) -> bool:
         """
         Determine if we should perform an initial sync (no products in database)
@@ -68,7 +96,8 @@ class ProductSyncService:
         Returns:
             True if initial sync is needed, False for incremental sync
         """
-        product_count = self.db_session.query(Product).count()
+        active_mode = self.current_sync_mode or config_service.get_sync_mode(self.db_session)
+        product_count = self.db_session.query(Product).filter(Product.mode == active_mode).count()
         return product_count == 0
     
     def _get_last_sync_time(self) -> Optional[datetime]:
@@ -78,7 +107,9 @@ class ProductSyncService:
         Returns:
             Last sync timestamp or None if no sync has been performed
         """
+        active_mode = self.current_sync_mode or config_service.get_sync_mode(self.db_session)
         last_synced_product = self.db_session.query(Product).filter(
+            Product.mode == active_mode,
             Product.last_synced_at.isnot(None)
         ).order_by(Product.last_synced_at.desc()).first()
         
@@ -97,6 +128,14 @@ class ProductSyncService:
         if not self.fulfil_service:
             raise Exception("Fulfil service not properly configured")
         
+        # Always get the current mode from the database (don't use cached mode)
+        self.current_sync_mode = config_service.get_sync_mode(self.db_session)
+        fulfil_config = config_service.get_fulfil_config_for_mode(self.current_sync_mode, self.db_session)
+        shiphero_config = config_service.get_shiphero_config_for_mode(self.current_sync_mode, self.db_session)
+        # Recreate services to ensure consistent credentials for this run
+        self.fulfil_service = FulfilService(fulfil_config['subdomain'], fulfil_config['api_key']) if (fulfil_config.get('subdomain') and fulfil_config.get('api_key')) else None
+        self.shiphero_service = ShipHeroService(shiphero_config['refresh_token'], shiphero_config['oauth_url'], shiphero_config['api_base_url']) if (shiphero_config.get('refresh_token') and shiphero_config.get('oauth_url') and shiphero_config.get('api_base_url')) else None
+
         summary = {
             "sync_type": "",
             "total_products": 0,
@@ -215,7 +254,10 @@ class ProductSyncService:
         logger.debug(f"Processing product: {parsed_data['code']} ({parsed_data['name']})")
         
         # Check if product already exists in our database
+        # Scope by mode to keep data separated
+        target_mode = self.current_sync_mode or config_service.get_sync_mode(self.db_session)
         existing_product = self.db_session.query(Product).filter(
+            Product.mode == target_mode,
             Product.fulfil_id == parsed_data["fulfil_id"]
         ).first()
         
@@ -236,7 +278,7 @@ class ProductSyncService:
             logger.debug(f"Updated existing product in database: {existing_product.code}")
         else:
             # Create new product in database
-            existing_product = Product(**parsed_data)
+            existing_product = Product(mode=target_mode, **parsed_data)
             self.db_session.add(existing_product)
             is_new_product = True
             # For created products, include full snapshot as changed fields (old = null)
@@ -262,6 +304,7 @@ class ProductSyncService:
                     }
             
             log_entry = ProductSyncLog(
+                mode=target_mode,
                 product_id=existing_product.id,
                 product_code=existing_product.code,
                 product_name=existing_product.name,
@@ -344,6 +387,8 @@ class ProductSyncService:
                             logger.error(f"Failed to create product in ShipHero: {existing_product.code}")
             except Exception as shiphero_error:
                 logger.error(f"Failed to sync product to ShipHero {existing_product.code}: {str(shiphero_error)}")
+                # Log additional details for debugging
+                logger.error(f"Product data that failed: {existing_product.to_shiphero_dict()}")
                 # We don't raise the exception here because we still want to consider the sync successful
                 # if the database sync was successful. ShipHero sync failure is logged but doesn't stop the process.
         
@@ -378,18 +423,23 @@ class ProductSyncService:
         Returns:
             Sync status information
         """
-        total_products = self.db_session.query(Product).count()
+        # Report status for current configured mode
+        mode = self.get_current_sync_mode()
+        total_products = self.db_session.query(Product).filter(Product.mode == mode).count()
         synced_products = self.db_session.query(Product).filter(
+            Product.mode == mode,
             Product.shiphero_id.isnot(None)
         ).count()
         
         # Get products synced in the last 24 hours
         last_24_hours = datetime.now(timezone.utc) - timedelta(hours=24)
         recent_synced_products = self.db_session.query(Product).filter(
+            Product.mode == mode,
             Product.last_synced_at >= last_24_hours
         ).count()
         
         last_synced_product = self.db_session.query(Product).filter(
+            Product.mode == mode,
             Product.last_synced_at.isnot(None)
         ).order_by(Product.last_synced_at.desc()).first()
         
@@ -405,7 +455,8 @@ class ProductSyncService:
             "recent_synced_products": recent_synced_products,
             "last_synced_at": last_synced_at.isoformat() if last_synced_at else None,
             "next_sync_type": next_sync_type,
-            "has_products": total_products > 0
+            "has_products": total_products > 0,
+            "current_mode": mode  # Include current mode in status
         }
 
 # Global instance

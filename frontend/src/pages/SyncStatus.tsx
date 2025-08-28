@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { RefreshCw, AlertCircle } from "lucide-react";
+import { Link } from "react-router-dom";
 import { configService } from "../services/configService";
+import toast from "react-hot-toast";
 
 interface SyncStatus {
   total_products: number;
@@ -35,14 +37,30 @@ const ProductSyncPage: React.FC = () => {
   const [totalPages, setTotalPages] = useState(1);
   const [query, setQuery] = useState("");
   const [showDetailsId, setShowDetailsId] = useState<number | null>(null);
+  const [syncMode, setSyncMode] = useState<"live" | "test">("live");
+  const [isUpdatingMode, setIsUpdatingMode] = useState(false);
+  const [isModeLoading, setIsModeLoading] = useState(true);
 
   useEffect(() => {
     loadSyncStatus();
+    loadSyncMode();
   }, []);
 
   useEffect(() => {
-    loadSyncLogs(page, query);
-  }, [page]);
+    // Only load logs after sync mode has been loaded and is not loading
+    if (syncMode && !isModeLoading) {
+      loadSyncLogs(page, query);
+    }
+  }, [page, query, syncMode, isModeLoading]);
+
+  // Monitor mode changes and reload logs when mode changes
+  useEffect(() => {
+    if (syncMode && !isModeLoading) {
+      console.log("Mode changed to:", syncMode, "- reloading logs");
+      setPage(1); // Reset to first page when mode changes
+      loadSyncLogs(1, query);
+    }
+  }, [syncMode]);
 
   const loadSyncStatus = async () => {
     try {
@@ -55,14 +73,58 @@ const ProductSyncPage: React.FC = () => {
 
   const loadSyncLogs = async (pageNum: number, q?: string) => {
     try {
+      console.log(
+        "Loading logs for mode:",
+        syncMode,
+        "page:",
+        pageNum,
+        "query:",
+        q
+      );
       setIsLoading(true);
-      const res = await configService.getProductSyncLogs(pageNum, perPage, q);
+      const res = await configService.getProductSyncLogs(
+        pageNum,
+        perPage,
+        q,
+        syncMode
+      );
       setLogs(res.items);
       setTotalPages(res.total_pages);
     } catch (error) {
       console.error("Failed to load product sync logs:", error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const loadSyncMode = async () => {
+    try {
+      setIsModeLoading(true);
+      const modeConfig = await configService.getProductSyncMode();
+      console.log("Loaded sync mode:", modeConfig.mode);
+      setSyncMode(modeConfig.mode);
+    } catch (error) {
+      console.error("Failed to load sync mode:", error);
+    } finally {
+      setIsModeLoading(false);
+    }
+  };
+
+  const handleModeChange = async (newMode: "live" | "test") => {
+    if (newMode === syncMode) return;
+    try {
+      setIsUpdatingMode(true);
+      await configService.updateProductSyncMode(newMode);
+      setSyncMode(newMode);
+      toast.success(`Product sync mode set to ${newMode.toUpperCase()}`);
+      // Reload logs for the new mode
+      setPage(1);
+      await loadSyncLogs(1, query);
+    } catch (error) {
+      toast.error("Failed to update sync mode");
+      console.error("Failed to update sync mode:", error);
+    } finally {
+      setIsUpdatingMode(false);
     }
   };
 
@@ -151,43 +213,98 @@ const ProductSyncPage: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="sm:flex sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Product Sync</h1>
           <p className="mt-2 text-sm text-gray-700">
             Monitor synchronization between Fulfil and the mediator database
           </p>
         </div>
-        <div className="mt-4 sm:mt-0 flex items-center space-x-2">
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-            placeholder="Search by product name, code, Fulfil ID, ShipHero ID"
-            className="border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
-          />
-          <button
-            onClick={handleSearch}
-            className="px-3 py-2 text-sm border rounded bg-white hover:bg-gray-50"
+        {/* Actions Bar */}
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+          {/* Mode control */}
+          <div className="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-md border">
+            <span className="text-sm font-medium text-gray-700">Mode</span>
+            {isModeLoading ? (
+              <div className="inline-flex items-center px-3 py-1.5 text-sm text-gray-500">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-400 mr-2"></div>
+                Loading...
+              </div>
+            ) : (
+              <div className="inline-flex rounded border overflow-hidden">
+                <button
+                  onClick={() => handleModeChange("live")}
+                  disabled={isUpdatingMode}
+                  className={`${
+                    syncMode === "live"
+                      ? "bg-primary-600 text-white"
+                      : "bg-white text-gray-700 hover:bg-gray-50"
+                  } px-3 py-1.5 text-sm font-medium focus:outline-none`}
+                >
+                  Live
+                </button>
+                <button
+                  onClick={() => handleModeChange("test")}
+                  disabled={isUpdatingMode}
+                  className={`${
+                    syncMode === "test"
+                      ? "bg-primary-600 text-white"
+                      : "bg-white text-gray-700 hover:bg-gray-50"
+                  } px-3 py-1.5 text-sm font-medium border-l focus:outline-none`}
+                >
+                  Test
+                </button>
+              </div>
+            )}
+            {isUpdatingMode && (
+              <div className="ml-1 animate-spin rounded-full h-4 w-4 border-b-2 border-primary-600"></div>
+            )}
+          </div>
+
+          {/* Checker button */}
+          <Link
+            to="/product-sync/checker"
+            className="inline-flex items-center justify-center px-3 py-2 text-sm rounded-md border border-primary-600 text-primary-700 bg-white hover:bg-primary-50"
           >
-            Search
-          </button>
-          <button
-            onClick={clearSearch}
-            className="px-3 py-2 text-sm border rounded bg-white hover:bg-gray-50"
-          >
-            Clear
-          </button>
+            Product Sync Checker
+          </Link>
+
+          {/* Refresh */}
           <button
             onClick={refreshData}
             disabled={isRefreshing}
-            className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+            className="inline-flex items-center px-3 py-2 rounded-md text-sm border bg-white hover:bg-gray-50"
           >
             <RefreshCw
               className={`h-5 w-5 mr-2 ${isRefreshing ? "animate-spin" : ""}`}
             />
             Refresh
+          </button>
+        </div>
+      </div>
+
+      {/* Filters row */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+        <input
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+          placeholder="Search by product name, code, Fulfil ID, ShipHero ID"
+          className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
+        />
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleSearch}
+            className="px-3 py-2 text-sm rounded-md border bg-white hover:bg-gray-50"
+          >
+            Search
+          </button>
+          <button
+            onClick={clearSearch}
+            className="px-3 py-2 text-sm rounded-md border bg-white hover:bg-gray-50"
+          >
+            Clear
           </button>
         </div>
       </div>
@@ -209,11 +326,34 @@ const ProductSyncPage: React.FC = () => {
       {/* Product Sync Logs */}
       <div className="bg-white shadow rounded-lg">
         <div className="px-4 py-5 sm:p-6">
-          <h3 className="text-lg leading-6 font-medium text-gray-900">
-            Product Sync Logs
-          </h3>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg leading-6 font-medium text-gray-900">
+              Product Sync Logs
+            </h3>
+            {!isModeLoading && (
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-500">Showing logs for:</span>
+                <span
+                  className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                    syncMode === "live"
+                      ? "bg-green-100 text-green-800"
+                      : "bg-blue-100 text-blue-800"
+                  }`}
+                >
+                  {syncMode.toUpperCase()} Mode
+                </span>
+              </div>
+            )}
+          </div>
           <div className="mt-4">
-            {isLoading ? (
+            {isModeLoading ? (
+              <div className="flex items-center justify-center h-32">
+                <div className="text-center">
+                  <RefreshCw className="h-8 w-8 text-primary-600 animate-spin mx-auto mb-2" />
+                  <p className="text-sm text-gray-500">Loading sync mode...</p>
+                </div>
+              </div>
+            ) : isLoading ? (
               <div className="flex items-center justify-center h-32">
                 <RefreshCw className="h-8 w-8 text-primary-600 animate-spin" />
               </div>
@@ -224,7 +364,11 @@ const ProductSyncPage: React.FC = () => {
                   No product sync logs
                 </h3>
                 <p className="mt-1 text-sm text-gray-500">
-                  No products have been synced yet.
+                  No products have been synced yet in {syncMode} mode.
+                </p>
+                <p className="mt-1 text-sm text-gray-400">
+                  Try switching to the other mode or check if products exist in
+                  the selected mode.
                 </p>
               </div>
             ) : (

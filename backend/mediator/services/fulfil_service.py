@@ -224,5 +224,24 @@ class FulfilService:
             "image_url": fulfil_product.get("image_url")
         }
 
+    def get_product_by_code(self, code: str) -> Optional[Dict[str, Any]]:
+        """
+        Find a single product by code by paging through the Fulfil API.
+        Returns the first matching product or None if not found.
+        """
+        page = 1
+        per_page = 50
+        while True:
+            data = self.get_products(page, per_page)
+            products = self._extract_products(data)
+            for p in products:
+                if (p.get('code') or '').strip() == code.strip():
+                    return p
+            # Check for more pages
+            if not self._has_more_pages(data, len(products), per_page):
+                break
+            page += 1
+        return None
+
 # Global instance
 fulfil_service = None

@@ -443,6 +443,17 @@ class ShipHeroService:
         response = self._make_request(mutation, variables)
         
         if "errors" in response:
+            # Log detailed error information for debugging
+            error_details = response.get("errors", [])
+            for error in error_details:
+                self.logger.error(f"ShipHero API Error: {error.get('message', 'Unknown error')}")
+                if 'field' in error:
+                    self.logger.error(f"Field: {error.get('field')}")
+                if 'code' in error:
+                    self.logger.error(f"Error Code: {error.get('code')}")
+                if 'operation' in error:
+                    self.logger.error(f"Operation: {error.get('operation')}")
+            
             raise Exception(f"Failed to update product in ShipHero: {response['errors']}")
         
         return response.get("data", {}).get("product_update", {})
@@ -518,6 +529,39 @@ class ShipHeroService:
         if isinstance(data_section, list) and len(data_section) > 0:
             return data_section[0]
         
+        return None
+
+    def get_product_by_id(self, product_id: str) -> Optional[Dict[str, Any]]:
+        """Fetch a product by GraphQL ID or legacy_id when possible."""
+        # Try modern by id
+        q = """
+        query ($id: ID!) {
+          product(id: $id) {
+            request_id
+            data {
+              id
+              legacy_id
+              name
+              sku
+              barcode
+              country_of_manufacture
+              dimensions { weight height width length }
+              tariff_code
+              customs_description
+              not_owned
+              dropship
+              created_at
+            }
+          }
+        }
+        """
+        try:
+            resp = self._make_request(q, {"id": product_id})
+            data_node = (resp.get('data', {}).get('product', {}) or {}).get('data')
+            if isinstance(data_node, dict):
+                return data_node
+        except Exception:
+            pass
         return None
 
 # Global instance

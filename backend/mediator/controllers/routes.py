@@ -128,13 +128,18 @@ def update_fulfil_config(current_user):
     db = next(get_db())
     try:
         data = request.get_json()
-        subdomain = data.get('subdomain', '').strip()
-        api_key = data.get('apiKey', '').strip()
+        mode = data.get('mode', 'live').strip().lower()
+        live_subdomain = data.get('live', {}).get('subdomain', '').strip()
+        live_api_key = data.get('live', {}).get('apiKey', '').strip()
+        test_subdomain = data.get('test', {}).get('subdomain', '').strip()
+        test_api_key = data.get('test', {}).get('apiKey', '').strip()
         
-        if not subdomain:
-            return jsonify({'message': 'Subdomain is required'}), 400
+        if not live_subdomain and not test_subdomain:
+            return jsonify({'message': 'At least one subdomain is required'}), 400
         
-        success = config_service.update_fulfil_config(subdomain, api_key, db)
+        success = config_service.update_fulfil_configs(
+            mode, live_subdomain, live_api_key, test_subdomain, test_api_key, db
+        )
         if success:
             # Reload settings
             Settings.load_from_database(config_service)
@@ -154,23 +159,33 @@ def update_shiphero_config(current_user):
     db = next(get_db())
     try:
         data = request.get_json()
-        refresh_token = data.get('refreshToken', '').strip()
-        oauth_url = data.get('oauthUrl', '').strip()
-        api_base_url = data.get('apiBaseUrl', '').strip()
-        default_warehouse_id = (data.get('defaultWarehouseId') or '').strip()
+        mode = data.get('mode', 'live').strip().lower()
         
-        if not refresh_token:
-            return jsonify({'message': 'Refresh token is required'}), 400
+        # Live configuration
+        live_refresh_token = data.get('live', {}).get('refreshToken', '').strip()
+        live_oauth_url = data.get('live', {}).get('oauthUrl', '').strip()
+        live_api_base_url = data.get('live', {}).get('apiBaseUrl', '').strip()
+        live_default_warehouse_id = (data.get('live', {}).get('defaultWarehouseId') or '').strip()
         
-        if not oauth_url:
-            return jsonify({'message': 'OAuth URL is required'}), 400
+        # Test configuration
+        test_refresh_token = data.get('test', {}).get('refreshToken', '').strip()
+        test_oauth_url = data.get('test', {}).get('oauthUrl', '').strip()
+        test_api_base_url = data.get('test', {}).get('apiBaseUrl', '').strip()
+        test_default_warehouse_id = (data.get('test', {}).get('defaultWarehouseId') or '').strip()
         
-        if not api_base_url:
-            return jsonify({'message': 'API base URL is required'}), 400
+        if not live_refresh_token and not test_refresh_token:
+            return jsonify({'message': 'At least one refresh token is required'}), 400
         
-        success = config_service.update_shiphero_config(refresh_token, oauth_url, api_base_url, db)
-        if success and default_warehouse_id:
-            success = config_service.update_shiphero_default_warehouse(default_warehouse_id, db)
+        if not live_oauth_url and not test_oauth_url:
+            return jsonify({'message': 'At least one OAuth URL is required'}), 400
+        
+        if not live_api_base_url and not test_api_base_url:
+            return jsonify({'message': 'At least one API base URL is required'}), 400
+        
+        success = config_service.update_shiphero_configs(
+            mode, live_refresh_token, live_oauth_url, live_api_base_url, live_default_warehouse_id,
+            test_refresh_token, test_oauth_url, test_api_base_url, test_default_warehouse_id, db
+        )
         if success:
             # Reload settings
             Settings.load_from_database(config_service)
@@ -381,8 +396,14 @@ def get_product_sync_logs(current_user):
             per_page = 100
         offset = (page - 1) * per_page
         q = (request.args.get('q') or '').strip()
+        mode = (request.args.get('mode') or '').strip().lower()
+        
+        # If no mode specified, use the current configured sync mode
+        if mode not in ('live', 'test'):
+            mode = config_service.get_sync_mode(db)
 
         base_query = db.query(ProductSyncLog).join(Product, ProductSyncLog.product_id == Product.id, isouter=True)
+        base_query = base_query.filter(ProductSyncLog.mode == mode)
 
         if q:
             # Determine if q is numeric (possible fulfil_id)
@@ -410,6 +431,7 @@ def get_product_sync_logs(current_user):
                 'action': log.action,
                 'changed_fields': log.changed_fields,
                 'synced_at': log.synced_at.isoformat() if log.synced_at else None,
+                'mode': log.mode,
             }
         
         return jsonify({
@@ -417,7 +439,8 @@ def get_product_sync_logs(current_user):
             'page': page,
             'per_page': per_page,
             'total': total,
-            'total_pages': (total + per_page - 1) // per_page
+            'total_pages': (total + per_page - 1) // per_page,
+            'current_mode': mode  # Include current mode in response
         })
     except Exception as e:
         return jsonify({'message': f'Failed to get product sync logs: {str(e)}'}), 500
@@ -434,3 +457,216 @@ def get_sync_status(current_user):
 @token_required
 def get_sync_logs(current_user):
     return get_product_sync_logs(current_user)
+
+@routes.route('/config/product-sync/mode', methods=['GET'])
+@token_required
+def get_product_sync_mode(current_user):
+    # Get database session for this request
+    db = next(get_db())
+    try:
+        mode = config_service.get_config('product_sync.mode', db) or 'live'
+        return jsonify({'mode': mode})
+    except Exception as e:
+        return jsonify({'message': str(e)}), 500
+    finally:
+        db.close()
+
+@routes.route('/config/product-sync/mode', methods=['PUT'])
+@token_required
+@admin_required
+def update_product_sync_mode(current_user):
+    # Get database session for this request
+    db = next(get_db())
+    try:
+        data = request.get_json()
+        mode = data.get('mode', 'live').strip().lower()
+        
+        if mode not in ['live', 'test']:
+            return jsonify({'message': 'Mode must be either "live" or "test"'}), 400
+        
+        success = config_service.set_config('product_sync.mode', mode, 'Active module mode for product sync (live/test)', False, db)
+        if success:
+            # Reload settings
+            Settings.load_from_database(config_service)
+            
+            # Reload the product sync service configuration to use the new mode
+            from ..services.product_sync_service import product_sync_service
+            product_sync_service.reload_configuration()
+            
+            return jsonify({'message': 'Product sync mode updated successfully'})
+        else:
+            return jsonify({'message': 'Failed to update product sync mode'}), 500
+    except Exception as e:
+        return jsonify({'message': str(e)}), 500
+    finally:
+        db.close()
+
+@routes.route('/product-sync/check', methods=['GET'])
+@token_required
+def product_sync_check(current_user):
+    """Check a product's presence and data across DB, Fulfil, and ShipHero based on mode."""
+    from ..database.db import get_db
+    from ..models.models import Product
+    db = next(get_db())
+    try:
+        code = (request.args.get('code') or '').strip()
+        mode = (request.args.get('mode') or '').strip().lower()
+        if not code:
+            return jsonify({'message': 'code is required'}), 400
+        if mode not in ('live', 'test'):
+            mode = config_service.get_sync_mode()
+
+        # Look up in our DB first (per mode)
+        product = db.query(Product).filter(Product.mode == mode, Product.code == code).first()
+        db_fulfil_id = product.fulfil_id if product else None
+        db_shiphero_id = product.shiphero_id if product else None
+
+        # Serialize local product fields for comparison
+        def to_serializable(val):
+            try:
+                from decimal import Decimal
+                if isinstance(val, Decimal):
+                    return float(val)
+            except Exception:
+                pass
+            return val
+
+        local_fields = None
+        if product:
+            local_fields = {
+                'mode': product.mode,
+                'fulfil_id': product.fulfil_id,
+                'shiphero_id': product.shiphero_id,
+                'code': product.code,
+                'name': product.name,
+                'template_name': product.template_name,
+                'category_name': product.category_name,
+                'variant_name': product.variant_name,
+                'upc': product.upc,
+                'asin': product.asin,
+                'buyer_sku': product.buyer_sku,
+                'weight_gm': to_serializable(product.weight_gm),
+                'weight_oz': to_serializable(product.weight_oz),
+                'length_cm': to_serializable(product.length_cm),
+                'width_cm': to_serializable(product.width_cm),
+                'height_cm': to_serializable(product.height_cm),
+                'length_in': to_serializable(product.length_in),
+                'width_in': to_serializable(product.width_in),
+                'height_in': to_serializable(product.height_in),
+                'dimension_unit': product.dimension_unit,
+                'weight_uom': product.weight_uom,
+                'country_of_origin': product.country_of_origin,
+                'hs_code': product.hs_code,
+                'customs_description': product.customs_description,
+                'quantity_per_case': product.quantity_per_case,
+                'unit_of_measure': product.unit_of_measure,
+                'image_url': product.image_url,
+            }
+
+        # Initialize external services for the requested mode
+        fulfil_cfg = config_service.get_fulfil_config_for_mode(mode)
+        shiphero_cfg = config_service.get_shiphero_config_for_mode(mode)
+
+        fulfil_data = None
+        fulfil_normalized = None
+        shiphero_data = None
+        fulfil_error = None
+        shiphero_error = None
+
+        # Fulfil fetch: by code through paging (Fulfil API docs: products.json)
+        try:
+            if fulfil_cfg.get('subdomain') and fulfil_cfg.get('api_key'):
+                from mediator.services.fulfil_service import FulfilService
+                fs = FulfilService(
+                    fulfil_cfg['subdomain'], fulfil_cfg['api_key']
+                )
+                fulfil_data = fs.get_product_by_code(code)
+                if fulfil_data:
+                    try:
+                        fulfil_normalized = fs.parse_product_data(fulfil_data)
+                    except Exception:
+                        fulfil_normalized = None
+            else:
+                fulfil_error = 'Fulfil configuration not set for this mode'
+        except Exception as e:
+            fulfil_error = str(e)
+
+        # ShipHero fetch: prefer by SKU; if DB has id, we can try by id
+        try:
+            if shiphero_cfg.get('refresh_token') and shiphero_cfg.get('oauth_url') and shiphero_cfg.get('api_base_url'):
+                from mediator.services.shiphero_service import ShipHeroService
+                sh = ShipHeroService(
+                    shiphero_cfg['refresh_token'], shiphero_cfg['oauth_url'], shiphero_cfg['api_base_url']
+                )
+                if db_shiphero_id:
+                    shiphero_data = sh.get_product_by_id(db_shiphero_id)
+                if not shiphero_data:
+                    shiphero_data = sh.get_product_by_sku(code)
+            else:
+                shiphero_error = 'ShipHero configuration not set for this mode'
+        except Exception as e:
+            shiphero_error = str(e)
+
+        # Normalize ShipHero to local fields for comparison
+        shiphero_normalized = None
+        if shiphero_data:
+            try:
+                dims = (shiphero_data.get('dimensions') or {}) if isinstance(shiphero_data, dict) else {}
+                shiphero_normalized = {
+                    'code': shiphero_data.get('sku'),
+                    'name': shiphero_data.get('name'),
+                    'upc': shiphero_data.get('barcode'),
+                    'hs_code': shiphero_data.get('tariff_code'),
+                    'customs_description': shiphero_data.get('customs_description'),
+                    'country_of_origin': shiphero_data.get('country_of_manufacture'),
+                    # Dimensions as provided by ShipHero (strings). Units depend on account; display only
+                    'length_cm': None,
+                    'width_cm': None,
+                    'height_cm': None,
+                    'length_in': dims.get('length'),
+                    'width_in': dims.get('width'),
+                    'height_in': dims.get('height'),
+                    'weight_gm': None,
+                    'weight_oz': dims.get('weight'),
+                    'image_url': None,
+                    'template_name': None,
+                    'category_name': None,
+                    'variant_name': None,
+                    'asin': None,
+                    'buyer_sku': None,
+                    'quantity_per_case': None,
+                    'unit_of_measure': None,
+                    'dimension_unit': None,
+                    'weight_uom': None,
+                }
+            except Exception:
+                shiphero_normalized = None
+
+        return jsonify({
+            'mode': mode,
+            'code': code,
+            'database': {
+                'exists': product is not None,
+                'fulfil_id': db_fulfil_id,
+                'shiphero_id': db_shiphero_id,
+            },
+            'local': local_fields,
+            'fulfil': {
+                'success': fulfil_data is not None,
+                'error': fulfil_error,
+                'data': fulfil_data,
+                'normalized': fulfil_normalized,
+                'docs': 'https://fulfil-3pl-integration-api.readme.io/reference/list-all-products'
+            },
+            'shiphero': {
+                'success': shiphero_data is not None,
+                'error': shiphero_error,
+                'data': shiphero_data,
+                'normalized': shiphero_normalized,
+                'docs': 'https://developer.shiphero.com/examples-query/#product'
+            }
+        })
+    except Exception as e:
+        return jsonify({'message': f'Failed to check product sync: {str(e)}'}), 500
+    finally:
+        db.close()

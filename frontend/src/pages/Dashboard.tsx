@@ -29,9 +29,18 @@ const Dashboard: React.FC = () => {
     try {
       setIsLoading(true);
       const config = await configService.getConfig();
+      const fulfilLiveConfigured = !!(
+        config.fulfil?.live?.subdomain && config.fulfil?.live?.apiKey
+      );
+      const fulfilTestConfigured = !!(
+        config.fulfil?.test?.subdomain && config.fulfil?.test?.apiKey
+      );
+      const shipheroLiveConfigured = !!config.shiphero?.live?.refreshToken;
+      const shipheroTestConfigured = !!config.shiphero?.test?.refreshToken;
+
       setConfigStatus({
-        fulfilConfigured: !!(config.fulfil.subdomain && config.fulfil.apiKey),
-        shipheroConfigured: !!config.shiphero.refreshToken,
+        fulfilConfigured: fulfilLiveConfigured || fulfilTestConfigured,
+        shipheroConfigured: shipheroLiveConfigured || shipheroTestConfigured,
         emailConfigured: false, // Will be updated below
       });
 

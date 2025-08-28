@@ -6,15 +6,31 @@ const API_BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:5000";
 axios.defaults.withCredentials = true;
 
 export interface FulfilConfig {
-  subdomain: string;
-  apiKey: string;
+  mode: "live" | "test";
+  live: {
+    subdomain: string;
+    apiKey: string;
+  };
+  test: {
+    subdomain: string;
+    apiKey: string;
+  };
 }
 
 export interface ShipHeroConfig {
-  refreshToken: string;
-  oauthUrl: string;
-  apiBaseUrl: string;
-  defaultWarehouseId?: string;
+  mode: "live" | "test";
+  live: {
+    refreshToken: string;
+    oauthUrl: string;
+    apiBaseUrl: string;
+    defaultWarehouseId?: string;
+  };
+  test: {
+    refreshToken: string;
+    oauthUrl: string;
+    apiBaseUrl: string;
+    defaultWarehouseId?: string;
+  };
 }
 
 export interface SystemConfig {
@@ -31,6 +47,10 @@ export interface EmailConfig {
   fromEmail: string;
   fromName: string;
   isActive: boolean;
+}
+
+export interface ProductSyncConfig {
+  mode: "live" | "test";
 }
 
 export interface ConfigResponse {
@@ -78,8 +98,15 @@ class ConfigService {
   async updateFulfilConfig(config: FulfilConfig): Promise<void> {
     try {
       await this.api.put("/api/config/fulfil", {
-        subdomain: config.subdomain,
-        apiKey: config.apiKey,
+        mode: config.mode,
+        live: {
+          subdomain: config.live.subdomain,
+          apiKey: config.live.apiKey,
+        },
+        test: {
+          subdomain: config.test.subdomain,
+          apiKey: config.test.apiKey,
+        },
       });
     } catch (error) {
       if (axios.isAxiosError(error)) {
@@ -95,10 +122,19 @@ class ConfigService {
   async updateShipHeroConfig(config: ShipHeroConfig): Promise<void> {
     try {
       await this.api.put("/api/config/shiphero", {
-        refreshToken: config.refreshToken,
-        oauthUrl: config.oauthUrl,
-        apiBaseUrl: config.apiBaseUrl,
-        defaultWarehouseId: config.defaultWarehouseId || "",
+        mode: config.mode,
+        live: {
+          refreshToken: config.live.refreshToken,
+          oauthUrl: config.live.oauthUrl,
+          apiBaseUrl: config.live.apiBaseUrl,
+          defaultWarehouseId: config.live.defaultWarehouseId || "",
+        },
+        test: {
+          refreshToken: config.test.refreshToken,
+          oauthUrl: config.test.oauthUrl,
+          apiBaseUrl: config.test.apiBaseUrl,
+          defaultWarehouseId: config.test.defaultWarehouseId || "",
+        },
       });
     } catch (error) {
       if (axios.isAxiosError(error)) {
@@ -246,7 +282,8 @@ class ConfigService {
   async getProductSyncLogs(
     page = 1,
     perPage = 20,
-    q?: string
+    q?: string,
+    mode?: "live" | "test"
   ): Promise<{
     items: any[];
     page: number;
@@ -259,6 +296,7 @@ class ConfigService {
       params.set("page", String(page));
       params.set("per_page", String(perPage));
       if (q && q.trim()) params.set("q", q.trim());
+      if (mode) params.set("mode", mode);
       const response = await this.api.get(
         `/api/product-sync/logs?${params.toString()}`
       );
@@ -270,6 +308,53 @@ class ConfigService {
         );
       }
       throw new Error("Failed to fetch product sync logs");
+    }
+  }
+
+  // Product sync mode methods
+  async getProductSyncMode(): Promise<ProductSyncConfig> {
+    try {
+      const response = await this.api.get("/api/config/product-sync/mode");
+      return response.data;
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        throw new Error(
+          error.response?.data?.message || "Failed to fetch product sync mode"
+        );
+      }
+      throw new Error("Failed to fetch product sync mode");
+    }
+  }
+
+  async updateProductSyncMode(mode: "live" | "test"): Promise<void> {
+    try {
+      await this.api.put("/api/config/product-sync/mode", { mode });
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        throw new Error(
+          error.response?.data?.message || "Failed to update product sync mode"
+        );
+      }
+      throw new Error("Failed to update product sync mode");
+    }
+  }
+
+  async checkProductSync(code: string, mode: "live" | "test"): Promise<any> {
+    try {
+      const params = new URLSearchParams();
+      params.set("code", code);
+      params.set("mode", mode);
+      const response = await this.api.get(
+        `/api/product-sync/check?${params.toString()}`
+      );
+      return response.data;
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        throw new Error(
+          error.response?.data?.message || "Failed to check product sync"
+        );
+      }
+      throw new Error("Failed to check product sync");
     }
   }
 }
